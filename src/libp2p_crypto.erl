@@ -184,21 +184,32 @@ mk_sig_fun({ed25519, PrivKey}) ->
     fun(Bin) -> enacl:sign_detached(Bin, PrivKey) end.
 
 %% @doc Constructs an ECDH exchange function from a given private key.
-%%
+%% There are 2 diffrent key types on the network, ecdh doesn't work between
+%% them. This throws an error.
 %% Note that a Key Derivation Function should be applied to these keys
 %% before use
 -spec mk_ecdh_fun(privkey()) -> ecdh_fun().
 mk_ecdh_fun({ecc_compact, PrivKey}) ->
-    fun({ecc_compact, {PubKey, {namedCurve, ?secp256r1}}}) ->
-        public_key:compute_key(PubKey, PrivKey)
+    fun(OtherPubKey) ->
+        case OtherPubKey of
+            {ecc_compact, {PubKey, {namedCurve, ?secp256r1}}} ->
+                public_key:compute_key(PubKey, PrivKey);
+            _ ->
+                erlang:error({incompatible_key, OtherPubKey})
+        end
     end;
 mk_ecdh_fun({ed25519, PrivKey}) ->
-    %% Do an X25519 ECDH exchange after converting the ED25519 keys to Curve25519 keys
-    fun({ed25519, PubKey}) ->
-        enacl:box_beforenm(
-            enacl:crypto_sign_ed25519_public_to_curve25519(PubKey),
-            enacl:crypto_sign_ed25519_secret_to_curve25519(PrivKey)
-        )
+    fun(OtherPubKey) ->
+        case OtherPubKey of
+            {ed25519, PubKey} ->
+                %% Do an X25519 ECDH exchange after converting the ED25519 keys to Curve25519 keys
+                enacl:box_beforenm(
+                    enacl:crypto_sign_ed25519_public_to_curve25519(PubKey),
+                    enacl:crypto_sign_ed25519_secret_to_curve25519(PrivKey)
+                );
+            _ ->
+                erlang:error({incompatible_key, OtherPubKey})
+        end
     end.
 
 %% @doc Store the given keys in a given filename. The keypair is
