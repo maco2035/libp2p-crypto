@@ -185,7 +185,7 @@ mk_sig_fun({ed25519, PrivKey}) ->
 
 %% @doc Constructs an ECDH exchange function from a given private key.
 %% There are 2 diffrent key types on the network, ecdh doesn't work between
-%% them. This throws an error.
+%% them. This returns an error (not thrown).
 %% Note that a Key Derivation Function should be applied to these keys
 %% before use
 -spec mk_ecdh_fun(privkey()) -> ecdh_fun().
@@ -195,7 +195,8 @@ mk_ecdh_fun({ecc_compact, PrivKey}) ->
             {ecc_compact, {PubKey, {namedCurve, ?secp256r1}}} ->
                 public_key:compute_key(PubKey, PrivKey);
             _ ->
-                erlang:error({incompatible_key, OtherPubKey})
+                lager:warn("mismatched key type for ECDH: ~p", [OtherPubKey]),
+                {error, incompatible_key}
         end
     end;
 mk_ecdh_fun({ed25519, PrivKey}) ->
@@ -208,7 +209,9 @@ mk_ecdh_fun({ed25519, PrivKey}) ->
                     enacl:crypto_sign_ed25519_secret_to_curve25519(PrivKey)
                 );
             _ ->
-                erlang:error({incompatible_key, OtherPubKey})
+                lager:warn("mismatched key type for ECDH: ~p", [OtherPubKey]),
+                {error, incompatible_key}
+
         end
     end.
 
